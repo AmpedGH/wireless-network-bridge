@@ -202,6 +202,47 @@ nmcli device show eth0
 - NetworkManager's `shared` mode automatically handles NAT via iptables — no manual iptables rules needed
 - PoE is preferred for powering the Pi in a permanent installation to reduce cable clutter
 
+
+## Optional: Mullvad VPN Gateway
+
+Route all connected devices through Mullvad VPN automatically — no VPN app needed on individual devices.
+
+### 1. Install WireGuard
+
+```bash
+sudo apt install wireguard openresolv -y
+```
+
+### 2. Add Your Mullvad Config
+
+Download a WireGuard config from [mullvad.net](https://mullvad.net) → Account → WireGuard configuration → Linux. Copy the contents and paste into:
+
+```bash
+sudo nano /etc/wireguard/mullvad1.conf
+```
+
+### 3. Start the VPN
+
+```bash
+sudo wg-quick up mullvad1
+sudo systemctl enable wg-quick@mullvad1
+```
+
+### 4. Update Firewall Rules
+
+```bash
+sudo apt install iptables -y
+sudo iptables -t nat -A POSTROUTING -o mullvad1 -j MASQUERADE
+sudo iptables -A FORWARD -i eth0 -o mullvad1 -j ACCEPT
+sudo iptables -A FORWARD -i mullvad1 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+sudo apt install iptables-persistent -y
+```
+
+### 5. Refresh VPN Connection
+
+```bash
+sudo systemctl stop wg-quick@mullvad1 && sudo systemctl start wg-quick@mullvad1
+```
 ---
 
 ## License
