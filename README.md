@@ -269,6 +269,58 @@ Bring it back:
 sudo systemctl start wg-quick@mullvad1
 ```
 
+## VPN Watchdog (Auto-Restart on High Ping / Packet Loss)
+
+A bash script that monitors the VPN connection every 5 minutes and automatically restarts it if ping exceeds 200ms or packet loss exceeds 20%.
+
+### Create the Script
+
+```bash
+sudo nano /usr/local/bin/vpn-watchdog.sh
+```
+
+Paste the following:
+
+```bash
+#!/bin/bash
+
+PING_TARGET="8.8.8.8"
+PACKET_LOSS_THRESHOLD=20
+PING_THRESHOLD=200
+VPN_INTERFACE="mullvad1"
+LOG="/var/log/vpn-watchdog.log"
+
+PING_OUTPUT=$(ping -c 10 -W 2 $PING_TARGET 2>&1)
+LOSS=$(echo "$PING_OUTPUT" | grep -oP '\d+(?=% packet loss)')
+AVG_PING=$(echo "$PING_OUTPUT" | grep -oP '(?<=/)[\d.]+(?=/)' | tail -1)
+
+echo "$(date) — Loss: ${LOSS}% Ping: ${AVG_PING}ms" >> $LOG
+
+if [ "${LOSS:-100}" -ge "$PACKET_LOSS_THRESHOLD" ] || [ "${AVG_PING%.*}" -ge "$PING_THRESHOLD" ]; then
+    echo "$(date) — VPN degraded. Restarting..." >> $LOG
+    systemctl stop wg-quick@$VPN_INTERFACE
+    sleep 3
+    systemctl start wg-quick@$VPN_INTERFACE
+    echo "$(date) — VPN restarted." >> $LOG
+fi
+```
+
+### Make it Executable
+
+```bash
+sudo chmod +x /usr/local/bin/vpn-watchdog.sh
+```
+
+### Schedule via Cron (Every 5 Minutes)
+
+```bash
+sudo crontab -e
+```
+Add this line:
+
+```bash
+*/5 * * * * /usr/local/bin/vpn-watchdog.sh
+```
 
 
 ## License
