@@ -244,6 +244,32 @@ sudo apt install iptables-persistent -y
 sudo systemctl stop wg-quick@mullvad1 && sudo systemctl start wg-quick@mullvad1
 ```
 ---
+## Kill Switch (VPN Leak Protection)
+
+By default, if the Mullvad VPN drops, devices will fall back to unencrypted internet without warning. The kill switch blocks all traffic if the VPN tunnel goes down.
+
+### Enable Kill Switch
+
+```bash
+sudo iptables -A FORWARD -i eth0 -o wlan1 -j DROP
+sudo iptables -A FORWARD -i wlan1 -o eth0 -j DROP
+sudo iptables-save | sudo tee /etc/iptables/rules.v4
+```
+
+### Test It Works
+
+Bring the VPN down:
+```bash
+sudo systemctl stop wg-quick@mullvad1
+```
+Devices on the Arris should lose internet completely — not fall back to unencrypted traffic.
+
+Bring it back:
+```bash
+sudo systemctl start wg-quick@mullvad1
+```
+
+
 
 ## License
 
