@@ -322,6 +322,88 @@ Add this line:
 */5 * * * * /usr/local/bin/vpn-watchdog.sh
 ```
 
+## VPN Toggle Scripts (vpn-on / vpn-off)
+
+Two scripts to safely toggle the VPN, kill switch, and watchdog in one command.
+
+### Create vpn-off.sh
+
+```bash
+sudo nano /usr/local/bin/vpn-off.sh
+```
+
+Paste:
+
+```bash
+#!/bin/bash
+
+echo "$(date) — Stopping VPN watchdog..."
+sudo crontab -l | sed 's|.*/usr/local/bin/vpn-watchdog.sh|# &|' | sudo crontab -
+
+echo "$(date) — Stopping VPN..."
+sudo systemctl stop wg-quick@mullvad1
+
+echo "$(date) — Flushing all firewall rules..."
+sudo iptables -F FORWARD
+sudo iptables -t nat -F
+
+echo "$(date) — Restoring basic forwarding..."
+sudo nmcli connection up eth0-shared
+
+echo "Done. VPN off — devices browsing without VPN."
+```
+
+### Create vpn-on.sh
+
+```bash
+sudo nano /usr/local/bin/vpn-on.sh
+```
+
+Paste:
+
+```bash
+#!/bin/bash
+
+echo "$(date) — Starting VPN..."
+sudo systemctl start wg-quick@mullvad1
+sleep 3
+
+echo "$(date) — Flushing old firewall rules..."
+sudo iptables -F FORWARD
+sudo iptables -t nat -F
+
+echo "$(date) — Applying fresh firewall rules..."
+sudo iptables -t nat -A POSTROUTING -o mullvad1 -j MASQUERADE
+sudo iptables -A FORWARD -i eth0 -o mullvad1 -j ACCEPT
+sudo iptables -A FORWARD -i mullvad1 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o wlan1 -j DROP
+sudo iptables -A FORWARD -i wlan1 -o eth0 -j DROP
+
+echo "$(date) — Saving firewall rules..."
+sudo iptables-save | sudo tee /etc/iptables/rules.v4
+
+echo "$(date) — Re-enabling VPN watchdog..."
+sudo crontab -l | sed 's|# .*/usr/local/bin/vpn-watchdog.sh|*/5 * * * * /usr/local/bin/vpn-watchdog.sh|' | sudo crontab -
+
+echo "Done. VPN active, kill switch enabled, watchdog running."
+```
+
+### Make Both Executable
+
+```bash
+sudo chmod +x /usr/local/bin/vpn-off.sh
+sudo chmod +x /usr/local/bin/vpn-on.sh
+```
+
+### Usage
+
+```bash
+# Turn VPN off safely
+sudo vpn-off.sh
+
+# Turn VPN back on
+sudo vpn-on.sh
+```
 
 ## License
 
